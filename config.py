@@ -54,3 +54,11 @@ COST_PER_TOKEN = {
 CACHE_SIMILARITY_THRESHOLD = 0.87
 
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+
+# How long a cache entry stays eligible for a hit, per-entry from its own
+# creation time (not a scheduled global wipe) -- see Module 2.
+CACHE_TTL_SECONDS = 24 * 60 * 60
+
+# Fixed collection name so the app reconnects to the same persisted cache
+# across restarts.
+QDRANT_CACHE_COLLECTION = "semantic_cache"

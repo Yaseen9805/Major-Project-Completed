@@ -1,11 +1,33 @@
-"""In-memory semantic cache used by the adaptive handler (Setup B)."""
+"""Persistent semantic cache backed by Qdrant (Module 2).
+
+Replaces the prototype's in-memory list: entries survive process restarts,
+similarity search stays cosine-based, and each entry expires 24h after its
+*own* creation time (not a scheduled wipe of the whole cache) -- see
+purge_expired() and cache_reaper.py.
+"""
 
 import time
+import uuid
 
-import numpy as np
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    FilterSelector,
+    PointStruct,
+    Range,
+    VectorParams,
+)
 from sentence_transformers import SentenceTransformer
 
-from config import CACHE_SIMILARITY_THRESHOLD, EMBEDDING_MODEL_NAME
+from config import (
+    CACHE_SIMILARITY_THRESHOLD,
+    CACHE_TTL_SECONDS,
+    EMBEDDING_MODEL_NAME,
+    QDRANT_CACHE_COLLECTION,
+    QDRANT_URL,
+)
 
 _model = None
 
@@ -17,59 +39,94 @@ def _get_model() -> SentenceTransformer:
     return _model
 
 
-def embed(text: str) -> np.ndarray:
-    vector = _get_model().encode(text, normalize_embeddings=True)
-    return np.asarray(vector, dtype=np.float32)
+def embed(text: str):
+    return _get_model().encode(text, normalize_embeddings=True).tolist()
 
 
 class SemanticCache:
-    """Cosine-similarity cache over an in-memory list of entries.
+    """Qdrant-backed cache: one collection per instance.
 
-    Fine for the ~100-1000 entries this prototype deals with; a real vector
-    store (Qdrant/FAISS) would replace this at larger scale.
+    The module-level default instance below always uses the fixed
+    QDRANT_CACHE_COLLECTION name so it persists across restarts. Tests (or
+    anything else that wants an isolated cache) can pass their own
+    collection_name.
     """
 
-    def __init__(self, threshold: float = CACHE_SIMILARITY_THRESHOLD):
+    def __init__(
+        self,
+        threshold: float = CACHE_SIMILARITY_THRESHOLD,
+        collection_name: str = QDRANT_CACHE_COLLECTION,
+        ttl_seconds: float = CACHE_TTL_SECONDS,
+        client: QdrantClient | None = None,
+    ):
         self.threshold = threshold
-        self._entries = []  # list of dicts: embedding, query_text, answer, tier_used, timestamp
+        self.collection_name = collection_name
+        self.ttl_seconds = ttl_seconds
+        self.client = client or QdrantClient(url=QDRANT_URL)
+        self._ensure_collection()
+
+    def _ensure_collection(self) -> None:
+        if not self.client.collection_exists(self.collection_name):
+            vector_size = _get_model().get_sentence_embedding_dimension()
+            self.client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
+            )
+
+    def _freshness_filter(self) -> Filter:
+        cutoff = time.time() - self.ttl_seconds
+        return Filter(must=[FieldCondition(key="created_at", range=Range(gte=cutoff))])
 
     def check(self, query: str) -> dict | None:
-        if not self._entries:
+        hits = self.client.search(
+            collection_name=self.collection_name,
+            query_vector=embed(query),
+            query_filter=self._freshness_filter(),
+            score_threshold=self.threshold,
+            limit=1,
+        )
+        if not hits:
             return None
 
-        query_embedding = embed(query)
-        embeddings = np.stack([entry["embedding"] for entry in self._entries])
-        similarities = embeddings @ query_embedding  # embeddings are normalized -> cosine sim
-
-        best_idx = int(np.argmax(similarities))
-        best_score = float(similarities[best_idx])
-
-        if best_score >= self.threshold:
-            match = self._entries[best_idx]
-            return {
-                "answer": match["answer"],
-                "tier_used": match["tier_used"],
-                "matched_query": match["query_text"],
-                "similarity": best_score,
-            }
-        return None
+        match = hits[0]
+        return {
+            "answer": match.payload["answer"],
+            "tier_used": match.payload["tier_used"],
+            "matched_query": match.payload["query_text"],
+            "similarity": match.score,
+        }
 
     def add(self, query: str, answer: str, tier_used: str) -> None:
-        self._entries.append(
-            {
-                "embedding": embed(query),
+        point = PointStruct(
+            id=str(uuid.uuid4()),
+            vector=embed(query),
+            payload={
                 "query_text": query,
                 "answer": answer,
                 "tier_used": tier_used,
-                "timestamp": time.time(),
-            }
+                "created_at": time.time(),
+            },
         )
+        self.client.upsert(collection_name=self.collection_name, points=[point])
+
+    def purge_expired(self) -> int:
+        """Delete entries past their individual 24h TTL. Returns count before purge."""
+        before = len(self)
+        cutoff = time.time() - self.ttl_seconds
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=FilterSelector(
+                filter=Filter(must=[FieldCondition(key="created_at", range=Range(lt=cutoff))])
+            ),
+        )
+        return before - len(self)
 
     def clear(self) -> None:
-        self._entries.clear()
+        self.client.delete_collection(self.collection_name)
+        self._ensure_collection()
 
     def __len__(self) -> int:
-        return len(self._entries)
+        return self.client.count(self.collection_name, exact=True).count
 
 
 # Module-level default cache instance + functional API, matching the plan's
@@ -88,3 +145,7 @@ def add_to_cache(query: str, answer: str, tier_used: str) -> None:
 
 def clear_cache() -> None:
     _default_cache.clear()
+
+
+def purge_expired_cache_entries() -> int:
+    return _default_cache.purge_expired()
