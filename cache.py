@@ -6,6 +6,7 @@ similarity search stays cosine-based, and each entry expires 24h after its
 purge_expired() and cache_reaper.py.
 """
 
+import threading
 import time
 import uuid
 
@@ -30,12 +31,22 @@ from config import (
 )
 
 _model = None
+_model_lock = threading.Lock()
 
 
 def _get_model() -> SentenceTransformer:
+    """Thread-safe lazy singleton (double-checked locking).
+
+    Module 6's load test caught a real race here: under concurrent first
+    requests, multiple threads saw `_model is None` at once and all tried
+    to construct SentenceTransformer simultaneously, corrupting PyTorch's
+    lazy device-init and crashing with "Cannot copy out of meta tensor."
+    """
     global _model
     if _model is None:
-        _model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        with _model_lock:
+            if _model is None:
+                _model = SentenceTransformer(EMBEDDING_MODEL_NAME)
     return _model
 
 

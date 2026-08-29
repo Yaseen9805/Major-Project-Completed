@@ -58,6 +58,32 @@ def test_entry_survives_a_reconnect():
     assert result["answer"] == "About 300,000 km/s"
 
 
+def test_concurrent_first_embed_calls_do_not_race():
+    """Regression test for a real bug load_test.py found under concurrency
+    (Module 6): concurrent first calls to embed() raced on lazy model init
+    and crashed with 'Cannot copy out of meta tensor'."""
+    import threading
+
+    import cache
+
+    cache._model = None  # force a cold lazy-init race
+    errors = []
+
+    def worker():
+        try:
+            cache.embed("some query text")
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+
+
 def test_purge_expired_removes_only_stale_entries():
     cache = fresh_cache(ttl_seconds=1)
     cache.add("This entry will expire", "answer A", "small")

@@ -9,7 +9,7 @@ Cache persistence (Qdrant) and the learned router are later modules --
 this module's job is only the service shell + real infrastructure.
 """
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from qdrant_client import QdrantClient
@@ -45,6 +45,15 @@ class QueryResponse(BaseModel):
     estimated_cost: float
 
 
+def require_api_key(x_api_key: str = Header(..., alias="X-API-Key")) -> str:
+    """Auth dependency for /query (Module 6). /health and /metrics stay
+    open, matching normal practice for infra/monitoring endpoints."""
+    owner = db.get_api_key_owner(x_api_key)
+    if owner is None:
+        raise HTTPException(status_code=401, detail="invalid or missing API key")
+    return owner
+
+
 @app.get("/health")
 def health() -> dict:
     try:
@@ -66,7 +75,7 @@ def metrics() -> Response:
 
 
 @app.post("/query", response_model=QueryResponse)
-def query(request: QueryRequest) -> QueryResponse:
+def query(request: QueryRequest, owner: str = Depends(require_api_key)) -> QueryResponse:
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="query must not be empty")
 
@@ -85,6 +94,7 @@ def query(request: QueryRequest) -> QueryResponse:
         latency_ms=result["latency_ms"],
         estimated_cost=result["estimated_cost"],
         answer=result["answer"],
+        api_key_owner=owner,
     )
 
     QUERY_COUNT.labels(

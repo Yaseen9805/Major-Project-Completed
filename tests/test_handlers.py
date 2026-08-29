@@ -3,6 +3,8 @@ running with qwen2.5:0.5b, phi3:mini, and mistral:7b-instruct-q4_0 pulled --
 same requirement as the rest of the prototype.
 """
 
+import pytest
+
 from adaptive import ask_adaptive
 from baseline import ask_baseline
 from cache import clear_cache
@@ -35,6 +37,7 @@ def test_adaptive_cache_hit_on_repeat():
     assert second["latency_ms"] < first["latency_ms"]
 
 
+@pytest.mark.requires_large_model
 def test_reasoning_query_reaches_the_large_tier_model():
     """Module 3 regression guard: 'large' must be a genuinely distinct,
     working model -- not the medium/large aliasing bug from the prototype."""

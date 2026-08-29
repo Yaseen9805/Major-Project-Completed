@@ -9,6 +9,8 @@ import json
 
 import requests
 
+import db
+
 API_URL = "http://127.0.0.1:8000/query"
 QUERIES_PATH = "test_queries.json"
 
@@ -17,9 +19,15 @@ def main() -> None:
     with open(QUERIES_PATH, encoding="utf-8") as f:
         queries = json.load(f)
 
+    api_key = db.create_api_key("seed_traffic")
+    headers = {"X-API-Key": api_key}
+
     for i, q in enumerate(queries, start=1):
         response = requests.post(
-            API_URL, json={"query": q["query"], "system": "adaptive"}, timeout=240
+            API_URL,
+            json={"query": q["query"], "system": "adaptive"},
+            headers=headers,
+            timeout=240,
         )
         response.raise_for_status()
         result = response.json()

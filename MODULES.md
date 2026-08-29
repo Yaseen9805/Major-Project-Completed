@@ -13,7 +13,7 @@ produced by prior modules — no forward dependencies.
 | 3 | **Real Model Tiers & Data Collection** | ✅ Done | Get all three model tiers genuinely working and start logging real usage | Fix the tier setup (currently medium/large share one model), log every query + routing decision, keep the rule-based router as a fallback |
 | 4 | **Learned Router** | ✅ Done | Replace hand-written routing rules with a trained model | Extract features from queries, train a classifier (scikit-learn) on logged data, roll it out gradually alongside the old router before fully switching |
 | 5 | **Quality & Monitoring** | ✅ Done | Confirm cost savings aren't hurting answer quality, and catch issues early | BERTScore checks comparing smaller-model answers to the large model, alerts if query patterns shift a lot, live dashboards via Prometheus + Grafana |
-| 6 | **Security & Automated Deployment** | Not started | Make the system production-safe and remove manual deployment steps | API-key login with per-user usage tracking, automated testing/deployment via GitHub Actions, load testing under real, unpredictable traffic |
+| 6 | **Security & Automated Deployment** | ✅ Done | Make the system production-safe and remove manual deployment steps | API-key login with per-user usage tracking, automated testing/deployment via GitHub Actions, load testing under real, unpredictable traffic |
 | 7 | **Final Testing & Report** | Not started | Wrap up with thorough evaluation and documentation | Fix issues found during testing, compare adaptive system vs. baseline vs. original prototype, one-command Docker setup, final written report |
 
 ### Module 1 — what was actually built
@@ -56,6 +56,13 @@ produced by prior modules — no forward dependencies.
 - `docker-compose.yml` — added Prometheus + Grafana services; `monitoring/prometheus.yml` scrapes the host API via `host.docker.internal`; Grafana auto-provisions the Prometheus datasource and a "CostQual-Router" dashboard (cache hit rate, total cost, query volume by tier, p95 latency by tier)
 - Verified live end-to-end: a real query round-tripped through the API → showed up correctly labeled in `/metrics` → Prometheus scraped it (target `up`) → Grafana's provisioned dashboard and datasource both confirmed via its API
 - Full test suite (24 tests) still passing after instrumentation; `quality_monitor.py`/`drift_monitor.py` verified via live runs rather than unit tests, consistent with the project's existing convention of not unit-testing standalone report scripts (e.g. `quality_check.py`, `generate_report.py`)
+
+### Module 6 — what was actually built
+- **Auth**: `api_keys` table + `query_log.api_key_owner` column, `db.create_api_key()` / `db.get_api_key_owner()`, `manage_keys.py` CLI to issue keys, `require_api_key` FastAPI dependency gating `POST /query` (`/health`/`/metrics` stay open, standard for infra endpoints)
+- **CI/CD**: `.github/workflows/ci.yml` — Postgres + Qdrant as service containers, lightweight Ollama models pulled fresh each run (small + medium only; the large-tier test is marked `@pytest.mark.requires_large_model` and skipped in CI to avoid a 4GB download on every push, run locally instead), full pytest suite otherwise
+- **Load testing**: `load_test.py` fires concurrent, randomly-ordered requests (unlike `run_benchmark.py`'s fixed sequential pass) and reports success rate/throughput/latency percentiles
+- **A real bug found and fixed by load testing, not simulated:** the first `load_test.py` run at 5 concurrent workers hit **3/20 requests failing with 500s** — a genuine race condition in `cache.py`'s lazy singleton model loader (concurrent first requests all tried to construct the SentenceTransformer at once, corrupting PyTorch's lazy device-init: `"Cannot copy out of meta tensor"`). Fixed with double-checked locking in `_get_model()`; re-ran the same load test afterward and got **20/20 (100%)**. Added a fast, isolated regression test (`test_concurrent_first_embed_calls_do_not_race`) so this can't silently regress.
+- Full test suite (28 tests) passing, including the new auth tests and the concurrency regression test
 
 ---
 
