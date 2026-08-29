@@ -14,7 +14,7 @@ produced by prior modules — no forward dependencies.
 | 4 | **Learned Router** | ✅ Done | Replace hand-written routing rules with a trained model | Extract features from queries, train a classifier (scikit-learn) on logged data, roll it out gradually alongside the old router before fully switching |
 | 5 | **Quality & Monitoring** | ✅ Done | Confirm cost savings aren't hurting answer quality, and catch issues early | BERTScore checks comparing smaller-model answers to the large model, alerts if query patterns shift a lot, live dashboards via Prometheus + Grafana |
 | 6 | **Security & Automated Deployment** | ✅ Done | Make the system production-safe and remove manual deployment steps | API-key login with per-user usage tracking, automated testing/deployment via GitHub Actions, load testing under real, unpredictable traffic |
-| 7 | **Final Testing & Report** | Not started | Wrap up with thorough evaluation and documentation | Fix issues found during testing, compare adaptive system vs. baseline vs. original prototype, one-command Docker setup, final written report |
+| 7 | **Final Testing & Report** | ✅ Done | Wrap up with thorough evaluation and documentation | Fix issues found during testing, compare adaptive system vs. baseline vs. original prototype, one-command Docker setup, final written report |
 
 ### Module 1 — what was actually built
 - `docker-compose.yml` — Postgres 16 + Qdrant, both provisioned and health-checked
@@ -63,6 +63,15 @@ produced by prior modules — no forward dependencies.
 - **Load testing**: `load_test.py` fires concurrent, randomly-ordered requests (unlike `run_benchmark.py`'s fixed sequential pass) and reports success rate/throughput/latency percentiles
 - **A real bug found and fixed by load testing, not simulated:** the first `load_test.py` run at 5 concurrent workers hit **3/20 requests failing with 500s** — a genuine race condition in `cache.py`'s lazy singleton model loader (concurrent first requests all tried to construct the SentenceTransformer at once, corrupting PyTorch's lazy device-init: `"Cannot copy out of meta tensor"`). Fixed with double-checked locking in `_get_model()`; re-ran the same load test afterward and got **20/20 (100%)**. Added a fast, isolated regression test (`test_concurrent_first_embed_calls_do_not_race`) so this can't silently regress.
 - Full test suite (28 tests) passing, including the new auth tests and the concurrency regression test
+
+### Module 7 — what was actually built
+- **Fresh benchmark, not reused prototype data**: reran `run_benchmark.py` and `generate_report.py` against the real final system (3 genuine tiers, persistent cache), producing new `benchmark_results.csv`/`report.md`/charts. Result: **58% cost reduction** (up from the prototype's 35%, because tiers are no longer aliased), **23% cache hit rate** (unchanged), **+80% average latency** (a real, disclosed tradeoff — mistral:7b is slower than the baseline's phi3:mini)
+- Regenerated both quality checks against fresh data: LLM-judge 70% pass (10 sampled), BERTScore **avg F1 0.908, 89% pass rate** (36 scored)
+- Fixed a real report-clarity bug in `generate_report.py` (latency increases were printed as a negative "reduction" percentage, e.g. "-80%" instead of "increased by 80%")
+- **One-command Docker setup**: added `Dockerfile` + `ollama`/`api` services to `docker-compose.yml` — the full stack (Postgres, Qdrant, Ollama, API, Prometheus, Grafana) now starts with a single `docker compose up -d`. Verified live: all 6 containers healthy, a real query round-tripped through the fully containerized API → Qdrant → Ollama → Postgres path
+- **CI/CD fix found during this module's own testing**: the first real CI run failed with "no space left on device" (torch + Ollama models filled the GitHub runner's disk) — fixed by freeing ~10GB of unused preinstalled toolchains at the start of the job
+- `FINAL_REPORT.md` — the final written comparison: baseline vs. final adaptive system vs. original Module-0 prototype, including honest coverage of the latency tradeoff, the Module 6 concurrency bug, and current limitations (weak learned-router accuracy at 46 examples, drift detection unexercised on real drift, large tier untested in CI)
+- Full test suite (28 tests) passing
 
 ---
 

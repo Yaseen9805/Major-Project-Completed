@@ -53,8 +53,57 @@ services:
     depends_on:
       - prometheus
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: costqual-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # One-shot job: pulls the 3 model tiers into the ollama volume, then
+  # exits. Re-run (`docker compose up ollama-pull`) any time after a fresh
+  # volume; already-pulled models are a no-op.
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        ollama pull qwen2.5:0.5b
+        ollama pull phi3:mini
+        ollama pull mistral:7b-instruct-q4_0
+    environment:
+      OLLAMA_HOST: "ollama:11434"
+
+  api:
+    build: .
+    container_name: costqual-api
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_DSN: "postgresql://costqual:costqual@postgres:5432/costqual"
+      QDRANT_URL: "http://qdrant:6333"
+      OLLAMA_URL: "http://ollama:11434/api/generate"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   qdrant_data:
   prometheus_data:
   grafana_data:
+  ollama_data:

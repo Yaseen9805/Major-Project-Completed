@@ -1,37 +1,37 @@
 query_id,query,tier_used,bertscore_f1,pass
-1,What is the capital of France?,small,0.8795,True
-3,What is the boiling point of water in Celsius?,medium,0.9007,True
-5,What is the capital of Italy?,small,0.8507,True
-6,What is the capital of Japan?,small,0.8435,False
-8,Define photosynthesis.,small,0.8441,False
-9,What is the tallest mountain in the world?,medium,0.8549,True
-10,How many continents are there on Earth?,medium,0.9207,True
-11,What is 9 plus 16?,small,0.8805,True
-12,What is 15 times 12?,small,0.9018,True
-15,How does a refrigerator keep food cold?,medium,0.8492,False
-16,Who wrote Romeo and Juliet?,medium,0.8686,True
-17,Define gravity.,small,0.8578,True
-18,What is the speed of light?,small,0.8634,True
-19,What is the chemical symbol for gold?,small,0.8787,True
-21,What is the currency used in Japan?,small,0.8482,False
-22,Is Pluto a planet?,small,0.8363,False
-24,What is the chemical symbol for oxygen?,small,0.9338,True
-27,Convert 100 kilometers to miles.,medium,0.9015,True
-28,What year did World War II end?,medium,0.9097,True
-30,Who wrote Hamlet?,medium,0.9075,True
-34,What causes earthquakes?,medium,0.8759,True
-35,How fast does light travel?,medium,0.8684,True
-36,What is the freezing point of water in Fahrenheit?,medium,0.8554,True
-39,In what year did the Second World War come to an end?,medium,0.9032,True
-40,Name three primary colors.,medium,0.8807,True
-42,Is the Earth round?,small,0.8756,True
-43,What is the largest ocean on Earth?,small,0.8626,True
-45,What is the largest mammal on Earth?,small,0.854,True
-47,What is the capital of Canada?,small,0.8884,True
-48,What is the square root of 144?,small,0.852,True
-50,How many players are on a soccer team?,medium,0.9322,True
-52,Calculate 100 divided by 4.,small,0.8045,False
-53,Who painted the Mona Lisa?,medium,0.8475,False
-55,What is the main ingredient in guacamole?,small,0.8918,True
-57,Define an atom.,small,0.8595,True
-59,Describe how vaccines help the immune system.,medium,0.8602,True
+1,What is the capital of France?,small,1.0,True
+3,What is the boiling point of water in Celsius?,medium,0.9345,True
+5,What is the capital of Italy?,small,0.8789,True
+6,What is the capital of Japan?,small,0.8958,True
+8,Define photosynthesis.,small,0.8826,True
+9,What is the tallest mountain in the world?,medium,0.9024,True
+10,How many continents are there on Earth?,medium,0.9958,True
+11,What is 9 plus 16?,small,0.9146,True
+12,What is 15 times 12?,small,0.8498,False
+15,How does a refrigerator keep food cold?,medium,0.9036,True
+16,Who wrote Romeo and Juliet?,medium,0.9185,True
+17,Define gravity.,small,0.8692,True
+18,What is the speed of light?,small,0.8769,True
+19,What is the chemical symbol for gold?,small,1.0,True
+21,What is the currency used in Japan?,small,0.9263,True
+22,Is Pluto a planet?,small,0.8434,False
+24,What is the chemical symbol for oxygen?,small,0.9854,True
+27,Convert 100 kilometers to miles.,medium,0.9439,True
+28,What year did World War II end?,medium,1.0,True
+30,Who wrote Hamlet?,medium,0.888,True
+34,What causes earthquakes?,medium,0.8839,True
+35,How fast does light travel?,medium,0.8694,True
+36,What is the freezing point of water in Fahrenheit?,medium,0.9038,True
+39,In what year did the Second World War come to an end?,medium,0.9678,True
+40,Name three primary colors.,medium,0.9745,True
+42,Is the Earth round?,small,0.9245,True
+43,What is the largest ocean on Earth?,small,0.8769,True
+45,What is the largest mammal on Earth?,small,0.8856,True
+47,What is the capital of Canada?,small,0.8072,False
+48,What is the square root of 144?,small,0.8765,True
+50,How many players are on a soccer team?,medium,0.923,True
+52,Calculate 100 divided by 4.,small,0.8036,False
+53,Who painted the Mona Lisa?,medium,0.8828,True
+55,What is the main ingredient in guacamole?,small,0.9211,True
+57,Define an atom.,small,0.8655,True
+59,Describe how vaccines help the immune system.,medium,0.9064,True

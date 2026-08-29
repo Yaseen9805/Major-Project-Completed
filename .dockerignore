@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+.claude/
+.github/
+*.csv
+*.png
+*.pptx
+*.md

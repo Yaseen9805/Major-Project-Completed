@@ -4,6 +4,7 @@ global:
 scrape_configs:
   - job_name: costqual-api
     static_configs:
-      # host.docker.internal resolves to the host machine from inside a
-      # container -- the API itself runs on the host, not in Docker.
-      - targets: ["host.docker.internal:8000"]
+      # "api" is the containerized API service (Module 7's one-command
+      # setup). If running the API on the host instead during development,
+      # point this at host.docker.internal:8000.
+      - targets: ["api:8000"]

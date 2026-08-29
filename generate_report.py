@@ -186,15 +186,18 @@ def write_report(summary: dict) -> None:
     lines.append("![Estimated cost comparison](cost_comparison.png)\n")
     lines.append("![Average latency comparison](latency_comparison.png)\n")
 
+    latency_verb = "reduced" if latency_reduction_pct >= 0 else "increased"
     lines.append("## Interpretation\n")
     lines.append(
         f"The adaptive system (semantic cache + complexity-based model routing) reduced "
-        f"estimated cost by **{cost_reduction_pct:.0f}%** and average latency by "
-        f"**{latency_reduction_pct:.0f}%** compared to the always-on baseline, with a "
-        f"**{summary['overall_hit_rate']:.0%}** overall cache hit rate driven mostly by the "
-        f"duplicate and paraphrase query categories -- confirming that semantic caching "
-        f"catches near-duplicate questions, not just exact repeats, without needing a "
-        f"larger model for queries that don't require one."
+        f"estimated cost by **{cost_reduction_pct:.0f}%**, while average latency "
+        f"{latency_verb} by **{abs(latency_reduction_pct):.0f}%** compared to the always-on "
+        f"baseline -- the large tier (mistral:7b) is genuinely more capable but slower than "
+        f"the baseline's phi3:mini, so latency is a real tradeoff for cost savings on the "
+        f"queries routed there. Cache hit rate was **{summary['overall_hit_rate']:.0%}** "
+        f"overall, driven mostly by the duplicate and paraphrase query categories -- "
+        f"confirming that semantic caching catches near-duplicate questions, not just exact "
+        f"repeats, without needing a larger model for queries that don't require one."
     )
 
     with open("report.md", "w", encoding="utf-8") as f:

@@ -2,7 +2,7 @@
 
 import os
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
 
 # Postgres connection for the telemetry log (Module 1). Matches the
 # credentials in docker-compose.yml; overridable via env vars for CI/prod.
