@@ -44,3 +44,21 @@ def test_reasoning_query_reaches_the_large_tier_model():
     assert result["tier_used"] == "large"
     assert result["cache_hit"] is False
     assert len(result["answer"]) > 0
+
+
+def test_router_mode_flag_switches_which_router_is_used(monkeypatch):
+    """Module 4: ROUTER_MODE must actually gate which router ask_adaptive
+    uses, so the learned router can be A/B'd without a hard cutover."""
+    import adaptive
+
+    calls = {"rule_based": 0, "learned": 0}
+    monkeypatch.setattr(adaptive.router, "route", lambda q: (calls.__setitem__("rule_based", calls["rule_based"] + 1), "small")[1])
+    monkeypatch.setattr(adaptive.learned_router, "route", lambda q: (calls.__setitem__("learned", calls["learned"] + 1), "small")[1])
+
+    monkeypatch.setattr(adaptive, "ROUTER_MODE", "rule_based")
+    adaptive._route("some query")
+    assert calls == {"rule_based": 1, "learned": 0}
+
+    monkeypatch.setattr(adaptive, "ROUTER_MODE", "learned")
+    adaptive._route("some query")
+    assert calls == {"rule_based": 1, "learned": 1}

@@ -2,10 +2,17 @@
 
 import time
 
+import learned_router
+import router
 from cache import add_to_cache, check_cache
-from config import COST_PER_TOKEN, MODEL_TIERS
+from config import COST_PER_TOKEN, MODEL_TIERS, ROUTER_MODE
 from ollama_client import call_model
-from router import route
+
+
+def _route(query: str) -> str:
+    if ROUTER_MODE == "learned":
+        return learned_router.route(query)
+    return router.route(query)
 
 
 def ask_adaptive(query: str) -> dict:
@@ -22,7 +29,7 @@ def ask_adaptive(query: str) -> dict:
             "estimated_cost": COST_PER_TOKEN["cache_hit"],
         }
 
-    tier = route(query)
+    tier = _route(query)
     model = MODEL_TIERS[tier]
     result = call_model(model, query)
     total_tokens = result["input_tokens"] + result["output_tokens"]

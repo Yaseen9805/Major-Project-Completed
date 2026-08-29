@@ -60,3 +60,9 @@ CACHE_TTL_SECONDS = 24 * 60 * 60
 # Fixed collection name so the app reconnects to the same persisted cache
 # across restarts.
 QDRANT_CACHE_COLLECTION = "semantic_cache"
+
+# Which router ask_adaptive() uses: "rule_based" (default, hand-written
+# regex/keyword rules) or "learned" (trained classifier -- see
+# train_router.py). Defaults to rule_based so nothing changes until this is
+# deliberately flipped, enabling an A/B rollout (Module 4).
+ROUTER_MODE = os.environ.get("ROUTER_MODE", "rule_based")

@@ -11,7 +11,7 @@ produced by prior modules — no forward dependencies.
 | 1 | **Infrastructure Setup** | ✅ Done | Stand up the core services everything else runs on | Local models via Ollama (small/medium/large), PostgreSQL + Qdrant in Docker, database schema for logging, demo script turned into a proper API |
 | 2 | **Persistent Semantic Cache** | ✅ Done | Replace the temporary in-memory cache with one that survives restarts and scales | Move cache into Qdrant, similarity search stays cosine-based, each entry auto-expires 24h after it's created, periodic cleanup of expired entries |
 | 3 | **Real Model Tiers & Data Collection** | ✅ Done | Get all three model tiers genuinely working and start logging real usage | Fix the tier setup (currently medium/large share one model), log every query + routing decision, keep the rule-based router as a fallback |
-| 4 | **Learned Router** | Not started | Replace hand-written routing rules with a trained model | Extract features from queries, train a classifier (scikit-learn) on logged data, roll it out gradually alongside the old router before fully switching |
+| 4 | **Learned Router** | ✅ Done | Replace hand-written routing rules with a trained model | Extract features from queries, train a classifier (scikit-learn) on logged data, roll it out gradually alongside the old router before fully switching |
 | 5 | **Quality & Monitoring** | Not started | Confirm cost savings aren't hurting answer quality, and catch issues early | BERTScore checks comparing smaller-model answers to the large model, alerts if query patterns shift a lot, live dashboards via Prometheus + Grafana |
 | 6 | **Security & Automated Deployment** | Not started | Make the system production-safe and remove manual deployment steps | API-key login with per-user usage tracking, automated testing/deployment via GitHub Actions, load testing under real, unpredictable traffic |
 | 7 | **Final Testing & Report** | Not started | Wrap up with thorough evaluation and documentation | Fix issues found during testing, compare adaptive system vs. baseline vs. original prototype, one-command Docker setup, final written report |
@@ -39,6 +39,15 @@ produced by prior modules — no forward dependencies.
 - `tests/test_config.py` — regression guard asserting all three tiers are genuinely distinct models
 - `tests/test_handlers.py` — new end-to-end test confirming a reasoning query actually reaches and gets answered by the large-tier model
 - Full test suite (20 tests) passing against the real 3-tier setup
+
+### Module 4 — what was actually built
+- `seed_traffic.py` — replays `test_queries.json` through the **live API** (not a side channel) to produce genuine logged routing decisions, matching Module 3's "real usage" logging
+- `train_router.py` — pulls (query, tier) pairs from `query_log` where `cache_hit=false`, trains a TF-IDF + Logistic Regression classifier (`scikit-learn`), reports held-out accuracy, then refits on the full dataset and saves `router_model.joblib`
+- `learned_router.py` — same `route(query)` interface as `router.py`, backed by the trained model; falls back to the rule-based router if no model file is on disk yet (never hard-fails)
+- `config.py` — new `ROUTER_MODE` flag (`"rule_based"` default / `"learned"`); `adaptive.py` picks the router based on it, enabling an A/B rollout instead of a hard cutover
+- **Honest result, not hidden:** on the 46 real routing decisions collected so far, held-out accuracy is **58%** (weak on the "large" class, 0% recall on only 3 held-out examples) — expected with a dataset this small. `ROUTER_MODE` defaults to `rule_based` precisely because of this, so the weak model is available for testing but not live. Accuracy is expected to improve as more real traffic accumulates and `train_router.py` is rerun.
+- Verified live: `ROUTER_MODE=learned` end-to-end call correctly routes and answers through the trained model
+- 4 new tests (`test_learned_router.py` + a router-mode-switch test in `test_handlers.py`), full suite (24 tests) passing
 
 ---
 
