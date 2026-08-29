@@ -112,6 +112,7 @@ numbers that it's cheaper and just as accurate.
 |---|---|
 | `requirements.txt` | Python dependencies (`pip install -r requirements.txt`). |
 | `README.md` | What this is, how to run it, and the final results. |
+| `TECHNICAL_DEEP_DIVE.md` | Every technology, every file, every algorithm, and every design decision explained in depth — read this to understand the project at the level of someone who built it. |
 | `MODULES.md` | The 7-module build history — what each module added and what was verified. |
 | `FINAL_REPORT.md` | The final written comparison: baseline vs. adaptive vs. original prototype. |
 | `ABSTRACT.md` | The formal project summary. |

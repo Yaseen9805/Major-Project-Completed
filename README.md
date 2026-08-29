@@ -16,6 +16,8 @@ one-command Docker deployment. See `MODULES.md` for what each module added and `
 for the full final results.
 
 - New to this repo? Start with **`ARCHITECTURE.md`** for a file-by-file explanation.
+- Want to understand *everything* — every technology, every design decision, every trade-off, in
+  depth? See **`TECHNICAL_DEEP_DIVE.md`**.
 - Want the module-by-module build history? See **`MODULES.md`**.
 - Want the final results and comparison against the baseline/prototype? See **`FINAL_REPORT.md`**.
 - Need the formal summary? See **`ABSTRACT.md`**.
