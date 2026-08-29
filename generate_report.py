@@ -26,10 +26,6 @@ def load_rows() -> list[dict]:
         return list(csv.DictReader(f))
 
 
-def to_float(value: str) -> float:
-    return float(value)
-
-
 def to_bool(value: str) -> bool:
     return value.strip().lower() == "true"
 
@@ -42,8 +38,8 @@ def compute_stats(rows: list[dict]) -> dict:
     stats = {}
     for system in ("baseline", "adaptive"):
         system_rows = by_system[system]
-        latencies = [to_float(r["latency_ms"]) for r in system_rows]
-        costs = [to_float(r["estimated_cost"]) for r in system_rows]
+        latencies = [float(r["latency_ms"]) for r in system_rows]
+        costs = [float(r["estimated_cost"]) for r in system_rows]
         stats[system] = {
             "count": len(system_rows),
             "total_latency_ms": sum(latencies),

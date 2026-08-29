@@ -1,12 +1,9 @@
-"""CostQual-Router API (Module 1).
+"""CostQual-Router API.
 
-Wraps the existing adaptive/baseline handlers in a stateless HTTP service and
-logs every request to Postgres. Run with:
+Wraps the adaptive/baseline handlers in a stateless HTTP service, with
+API-key auth, per-request logging to Postgres, and Prometheus metrics.
 
-    uvicorn api:app --reload
-
-Cache persistence (Qdrant) and the learned router are later modules --
-this module's job is only the service shell + real infrastructure.
+Run with: uvicorn api:app --reload
 """
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
@@ -107,10 +104,4 @@ def query(request: QueryRequest, owner: str = Depends(require_api_key)) -> Query
         result["estimated_cost"]
     )
 
-    return QueryResponse(
-        answer=result["answer"],
-        tier_used=result["tier_used"],
-        cache_hit=result["cache_hit"],
-        latency_ms=result["latency_ms"],
-        estimated_cost=result["estimated_cost"],
-    )
+    return QueryResponse(**result)

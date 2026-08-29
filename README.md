@@ -15,7 +15,6 @@ full scope and what was deliberately left out (auth, CI/CD, k8s, monitoring, etc
 the real month-long project).
 
 - New to this repo? Start with **`ARCHITECTURE.md`** for a file-by-file explanation of how it fits together.
-- Presenting this? Use **`DEMO_GUIDE.md`** for a step-by-step run order and talking points.
 - Need the formal summary? See **`ABSTRACT.md`**.
 
 ## How it works
