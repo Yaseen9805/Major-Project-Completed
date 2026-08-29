@@ -1,6 +1,17 @@
 """Shared configuration for the CostQual-Router prototype."""
 
+import os
+
 OLLAMA_URL = "http://localhost:11434/api/generate"
+
+# Postgres connection for the telemetry log (Module 1). Matches the
+# credentials in docker-compose.yml; overridable via env vars for CI/prod.
+POSTGRES_DSN = os.environ.get(
+    "POSTGRES_DSN", "postgresql://costqual:costqual@localhost:5432/costqual"
+)
+
+# Qdrant endpoint for the persistent semantic cache (Module 2).
+QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")
 
 # Model used by the always-on baseline (Setup A).
 BASELINE_MODEL = "phi3:mini"

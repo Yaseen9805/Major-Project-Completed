@@ -6,15 +6,23 @@ produced by prior modules — no forward dependencies.
 
 ## Modules
 
-| # | Module | Objective | Key Techniques |
-|---|---|---|---|
-| 1 | **Infrastructure Setup** | Stand up the core services everything else runs on | Local models via Ollama (small/medium/large), PostgreSQL + Qdrant in Docker, database schema for logging, demo script turned into a proper API |
-| 2 | **Persistent Semantic Cache** | Replace the temporary in-memory cache with one that survives restarts and scales | Move cache into Qdrant, similarity search stays cosine-based, each entry auto-expires 24h after it's created, periodic cleanup of expired entries |
-| 3 | **Real Model Tiers & Data Collection** | Get all three model tiers genuinely working and start logging real usage | Fix the tier setup (currently medium/large share one model), log every query + routing decision, keep the rule-based router as a fallback |
-| 4 | **Learned Router** | Replace hand-written routing rules with a trained model | Extract features from queries, train a classifier (scikit-learn) on logged data, roll it out gradually alongside the old router before fully switching |
-| 5 | **Quality & Monitoring** | Confirm cost savings aren't hurting answer quality, and catch issues early | BERTScore checks comparing smaller-model answers to the large model, alerts if query patterns shift a lot, live dashboards via Prometheus + Grafana |
-| 6 | **Security & Automated Deployment** | Make the system production-safe and remove manual deployment steps | API-key login with per-user usage tracking, automated testing/deployment via GitHub Actions, load testing under real, unpredictable traffic |
-| 7 | **Final Testing & Report** | Wrap up with thorough evaluation and documentation | Fix issues found during testing, compare adaptive system vs. baseline vs. original prototype, one-command Docker setup, final written report |
+| # | Module | Status | Objective | Key Techniques |
+|---|---|---|---|---|
+| 1 | **Infrastructure Setup** | ✅ Done | Stand up the core services everything else runs on | Local models via Ollama (small/medium/large), PostgreSQL + Qdrant in Docker, database schema for logging, demo script turned into a proper API |
+| 2 | **Persistent Semantic Cache** | Not started | Replace the temporary in-memory cache with one that survives restarts and scales | Move cache into Qdrant, similarity search stays cosine-based, each entry auto-expires 24h after it's created, periodic cleanup of expired entries |
+| 3 | **Real Model Tiers & Data Collection** | Not started | Get all three model tiers genuinely working and start logging real usage | Fix the tier setup (currently medium/large share one model), log every query + routing decision, keep the rule-based router as a fallback |
+| 4 | **Learned Router** | Not started | Replace hand-written routing rules with a trained model | Extract features from queries, train a classifier (scikit-learn) on logged data, roll it out gradually alongside the old router before fully switching |
+| 5 | **Quality & Monitoring** | Not started | Confirm cost savings aren't hurting answer quality, and catch issues early | BERTScore checks comparing smaller-model answers to the large model, alerts if query patterns shift a lot, live dashboards via Prometheus + Grafana |
+| 6 | **Security & Automated Deployment** | Not started | Make the system production-safe and remove manual deployment steps | API-key login with per-user usage tracking, automated testing/deployment via GitHub Actions, load testing under real, unpredictable traffic |
+| 7 | **Final Testing & Report** | Not started | Wrap up with thorough evaluation and documentation | Fix issues found during testing, compare adaptive system vs. baseline vs. original prototype, one-command Docker setup, final written report |
+
+### Module 1 — what was actually built
+- `docker-compose.yml` — Postgres 16 + Qdrant, both provisioned and health-checked
+- `db/init.sql` — `query_log` table (query, system, tier, cache hit, latency, cost, timestamp)
+- `db.py` — connection + `log_query()` / `is_healthy()` helpers
+- `api.py` — FastAPI service: `POST /query` (runs the existing adaptive/baseline handlers, logs every request to Postgres) and `GET /health`
+- Verified live: containers healthy, `/health` reports DB up, a cold query round-trips through Ollama and logs a row, a repeat query hits the in-memory cache (93s → 24ms) and logs that too
+- 4 new tests in `tests/test_api.py`, full suite (16 tests) passing
 
 ---
 
