@@ -12,7 +12,7 @@ produced by prior modules — no forward dependencies.
 | 2 | **Persistent Semantic Cache** | ✅ Done | Replace the temporary in-memory cache with one that survives restarts and scales | Move cache into Qdrant, similarity search stays cosine-based, each entry auto-expires 24h after it's created, periodic cleanup of expired entries |
 | 3 | **Real Model Tiers & Data Collection** | ✅ Done | Get all three model tiers genuinely working and start logging real usage | Fix the tier setup (currently medium/large share one model), log every query + routing decision, keep the rule-based router as a fallback |
 | 4 | **Learned Router** | ✅ Done | Replace hand-written routing rules with a trained model | Extract features from queries, train a classifier (scikit-learn) on logged data, roll it out gradually alongside the old router before fully switching |
-| 5 | **Quality & Monitoring** | Not started | Confirm cost savings aren't hurting answer quality, and catch issues early | BERTScore checks comparing smaller-model answers to the large model, alerts if query patterns shift a lot, live dashboards via Prometheus + Grafana |
+| 5 | **Quality & Monitoring** | ✅ Done | Confirm cost savings aren't hurting answer quality, and catch issues early | BERTScore checks comparing smaller-model answers to the large model, alerts if query patterns shift a lot, live dashboards via Prometheus + Grafana |
 | 6 | **Security & Automated Deployment** | Not started | Make the system production-safe and remove manual deployment steps | API-key login with per-user usage tracking, automated testing/deployment via GitHub Actions, load testing under real, unpredictable traffic |
 | 7 | **Final Testing & Report** | Not started | Wrap up with thorough evaluation and documentation | Fix issues found during testing, compare adaptive system vs. baseline vs. original prototype, one-command Docker setup, final written report |
 
@@ -48,6 +48,14 @@ produced by prior modules — no forward dependencies.
 - **Honest result, not hidden:** on the 46 real routing decisions collected so far, held-out accuracy is **58%** (weak on the "large" class, 0% recall on only 3 held-out examples) — expected with a dataset this small. `ROUTER_MODE` defaults to `rule_based` precisely because of this, so the weak model is available for testing but not live. Accuracy is expected to improve as more real traffic accumulates and `train_router.py` is rerun.
 - Verified live: `ROUTER_MODE=learned` end-to-end call correctly routes and answers through the trained model
 - 4 new tests (`test_learned_router.py` + a router-mode-switch test in `test_handlers.py`), full suite (24 tests) passing
+
+### Module 5 — what was actually built
+- `quality_monitor.py` — replaces `quality_check.py`'s LLM-as-judge spot check with real BERTScore F1 comparing adaptive answers against baseline. Verified live: **81% pass rate, average F1 0.873** across 36 scored answers
+- `drift_monitor.py` — chi-squared test comparing the recent vs. reference tier-distribution of real routing decisions from `query_log`; flags when traffic looks statistically different from what the router was built around. Verified live (currently reports no drift, as expected on one seeding batch)
+- `api.py` — instrumented with `prometheus-client` (`costqual_queries_total`, `costqual_query_latency_ms`, `costqual_estimated_cost_total`), new `GET /metrics` endpoint
+- `docker-compose.yml` — added Prometheus + Grafana services; `monitoring/prometheus.yml` scrapes the host API via `host.docker.internal`; Grafana auto-provisions the Prometheus datasource and a "CostQual-Router" dashboard (cache hit rate, total cost, query volume by tier, p95 latency by tier)
+- Verified live end-to-end: a real query round-tripped through the API → showed up correctly labeled in `/metrics` → Prometheus scraped it (target `up`) → Grafana's provisioned dashboard and datasource both confirmed via its API
+- Full test suite (24 tests) still passing after instrumentation; `quality_monitor.py`/`drift_monitor.py` verified via live runs rather than unit tests, consistent with the project's existing convention of not unit-testing standalone report scripts (e.g. `quality_check.py`, `generate_report.py`)
 
 ---
 

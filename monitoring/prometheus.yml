@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: costqual-api
+    static_configs:
+      # host.docker.internal resolves to the host machine from inside a
+      # container -- the API itself runs on the host, not in Docker.
+      - targets: ["host.docker.internal:8000"]

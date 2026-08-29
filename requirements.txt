@@ -9,3 +9,6 @@ psycopg2-binary==2.9.9
 qdrant-client==1.9.1
 scikit-learn==1.5.0
 joblib==1.4.2
+bert-score==0.3.13
+prometheus-client==0.20.0
+scipy==1.13.1
