@@ -1,6 +1,6 @@
 """These tests call the real local Ollama models, so they need `ollama serve`
-running with qwen2.5:0.5b and phi3:mini pulled -- same requirement as the
-rest of the prototype.
+running with qwen2.5:0.5b, phi3:mini, and mistral:7b-instruct-q4_0 pulled --
+same requirement as the rest of the prototype.
 """
 
 from adaptive import ask_adaptive
@@ -33,3 +33,14 @@ def test_adaptive_cache_hit_on_repeat():
     assert first["cache_hit"] is False
     assert second["cache_hit"] is True
     assert second["latency_ms"] < first["latency_ms"]
+
+
+def test_reasoning_query_reaches_the_large_tier_model():
+    """Module 3 regression guard: 'large' must be a genuinely distinct,
+    working model -- not the medium/large aliasing bug from the prototype."""
+    clear_cache()
+    result = ask_adaptive("Explain why the sky is blue and compare it to why sunsets are red.")
+
+    assert result["tier_used"] == "large"
+    assert result["cache_hit"] is False
+    assert len(result["answer"]) > 0

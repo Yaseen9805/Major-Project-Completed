@@ -10,7 +10,7 @@ produced by prior modules — no forward dependencies.
 |---|---|---|---|---|
 | 1 | **Infrastructure Setup** | ✅ Done | Stand up the core services everything else runs on | Local models via Ollama (small/medium/large), PostgreSQL + Qdrant in Docker, database schema for logging, demo script turned into a proper API |
 | 2 | **Persistent Semantic Cache** | ✅ Done | Replace the temporary in-memory cache with one that survives restarts and scales | Move cache into Qdrant, similarity search stays cosine-based, each entry auto-expires 24h after it's created, periodic cleanup of expired entries |
-| 3 | **Real Model Tiers & Data Collection** | Not started | Get all three model tiers genuinely working and start logging real usage | Fix the tier setup (currently medium/large share one model), log every query + routing decision, keep the rule-based router as a fallback |
+| 3 | **Real Model Tiers & Data Collection** | ✅ Done | Get all three model tiers genuinely working and start logging real usage | Fix the tier setup (currently medium/large share one model), log every query + routing decision, keep the rule-based router as a fallback |
 | 4 | **Learned Router** | Not started | Replace hand-written routing rules with a trained model | Extract features from queries, train a classifier (scikit-learn) on logged data, roll it out gradually alongside the old router before fully switching |
 | 5 | **Quality & Monitoring** | Not started | Confirm cost savings aren't hurting answer quality, and catch issues early | BERTScore checks comparing smaller-model answers to the large model, alerts if query patterns shift a lot, live dashboards via Prometheus + Grafana |
 | 6 | **Security & Automated Deployment** | Not started | Make the system production-safe and remove manual deployment steps | API-key login with per-user usage tracking, automated testing/deployment via GitHub Actions, load testing under real, unpredictable traffic |
@@ -31,6 +31,14 @@ produced by prior modules — no forward dependencies.
 - `/health` now also reports Qdrant status
 - Verified live: wrote a cache entry in one Python process, read it back correctly from a **separate, freshly-started process** — proves persistence, not just correctness
 - 2 new tests in `tests/test_cache.py` (reconnect-persistence test, TTL-purge test), full suite (18 tests) passing
+
+### Module 3 — what was actually built
+- `config.py` — `MODEL_TIERS["large"]` now `mistral:7b-instruct-q4_0` (real model, pulled via Ollama), resolving the prototype's medium/large aliasing to the same model
+- Routing decisions were already being logged to Postgres by Module 1's `query_log` table (query text, tier, cache hit, cost, latency) — this is the labeled dataset Module 4's classifier will train on
+- Rule-based `router.py` kept unchanged as the active router / future fallback baseline
+- `tests/test_config.py` — regression guard asserting all three tiers are genuinely distinct models
+- `tests/test_handlers.py` — new end-to-end test confirming a reasoning query actually reaches and gets answered by the large-tier model
+- Full test suite (20 tests) passing against the real 3-tier setup
 
 ---
 

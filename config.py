@@ -16,15 +16,13 @@ QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")
 # Model used by the always-on baseline (Setup A).
 BASELINE_MODEL = "phi3:mini"
 
-# Tiers available to the adaptive router (Setup B).
-# NOTE: only two model sizes are pulled for this prototype (to keep the demo
-# fast and avoid a large mistral:7b download). "medium" and "large" both
-# route to phi3:mini today -- add mistral:7b-instruct-q4_0 here and swap it
-# in for "large" if you want a true three-model tier split.
+# Tiers available to the adaptive router (Setup B). Three genuinely distinct
+# model sizes as of Module 3 (the prototype aliased medium/large to the same
+# model to avoid a large download).
 MODEL_TIERS = {
     "small": "qwen2.5:0.5b",
     "medium": "phi3:mini",
-    "large": "phi3:mini",
+    "large": "mistral:7b-instruct-q4_0",
 }
 
 # Estimated cost proxy, in fake-USD per token. These do NOT reflect real
