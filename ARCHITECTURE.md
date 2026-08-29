@@ -1,84 +1,136 @@
-# Project Infrastructure — File by File
+# Project Architecture — File by File
 
 This doc explains what every file in this repo does, in plain language, so anyone new to the
-project can get oriented in a few minutes. For "why we built this" and results, see `README.md`.
-For the original build spec, see `prototype_plan.md`.
+project can get oriented in a few minutes. For results and how to run it, see `README.md`. For the
+module-by-module build history, see `MODULES.md`. For the original 5-day prototype spec this system
+grew out of, see `prototype_plan.md`.
 
 ## The big picture
 
-We're comparing two ways of answering questions with a local LLM:
+We're comparing two ways of answering questions with locally-hosted LLMs:
 
 - **Setup A (baseline)** — dumb and simple. Every question goes to the same model. No memory,
   no shortcuts.
 - **Setup B (adaptive)** — smarter. It first checks "have I basically answered this before?" (the
-  cache), and if not, it picks the cheapest model that can actually handle the question (the
-  router).
+  persistent cache), and if not, it picks the cheapest of three genuinely distinct model tiers that
+  can actually handle the question (the router — rule-based by default, or a trained classifier
+  behind a flag).
 
-Everything else in the repo exists to run both systems on the same questions and prove, with
-numbers, that B is faster and cheaper without getting noticeably dumber.
+Everything else in the repo exists to run both systems, serve Setup B as a real API, and prove with
+numbers that it's cheaper and just as accurate.
 
-## Core logic (the actual "product")
+## Core serving logic
 
 | File | What it does |
 |---|---|
-| `config.py` | One place for all the settings: which models map to which tier, the fake-cost-per-token assumptions, the cache similarity threshold. Change behavior here, not by hunting through other files. |
-| `ollama_client.py` | The only place that talks to Ollama (the local model server) over HTTP. Handles retries if a call times out. Every other file goes through this instead of calling Ollama directly. |
-| `baseline.py` | Setup A. One function, `ask_baseline(query)`, that always calls the same model and returns the answer + how long it took + what it "cost." |
-| `router.py` | The brain of Setup B's cost savings. Looks at a question's wording and length and decides: is this "small" (trivial), "medium" (normal), or "large" (needs real reasoning)? Pure rules, no ML — e.g. "starts with 'what is' and is short" → small; "contains 'explain' or 'compare'" → large. |
-| `cache.py` | The brain of Setup B's speed savings. Turns each question into a vector (a list of numbers representing its meaning) using a small embedding model, and checks if a *similar-meaning* question was already asked. If yes → return the old answer instantly, skip the model entirely. |
-| `adaptive.py` | Setup B. One function, `ask_adaptive(query)`, that wires `cache.py` and `router.py` together: check cache first, if miss then route to a tier and call the model, then save the answer to the cache for next time. |
+| `config.py` | Every setting in one place: model tiers, fake-cost-per-token assumptions, cache threshold/TTL, DB/Qdrant/Ollama connection URLs (env-overridable), the `ROUTER_MODE` flag. |
+| `ollama_client.py` | The only place that talks to Ollama over HTTP. Retries on timeout. |
+| `baseline.py` | Setup A. `ask_baseline(query)` — always calls the same fixed model. |
+| `router.py` | Rule-based complexity classifier. Pure regex/keyword rules, no ML — e.g. "starts with 'what is' and is short" → small; "contains 'explain' or 'compare'" → large. |
+| `learned_router.py` | A trained classifier (see `train_router.py`) with the same interface as `router.py`. Not active by default — `ROUTER_MODE` in `config.py` controls which one `adaptive.py` uses, so it can be A/B'd before a full cutover. |
+| `cache.py` | The semantic cache. Turns each question into an embedding vector and checks Qdrant for a similar-meaning question asked before. Persistent across restarts; each entry expires 24h after its own creation time (not a scheduled global wipe). |
+| `adaptive.py` | Setup B. `ask_adaptive(query)`: check cache → if miss, route to a tier and call the model → save the answer to the cache. |
+
+## Service layer
+
+| File | What it does |
+|---|---|
+| `api.py` | FastAPI service exposing the whole system over HTTP: `POST /query` (API-key gated, logs every request to Postgres, updates Prometheus metrics), `GET /health`, `GET /metrics`. |
+| `db.py` | Postgres access: request logging (`query_log`), API-key management (`api_keys`). |
+| `db/init.sql` | Schema for `query_log` and `api_keys`. |
+| `manage_keys.py` | CLI to issue new API keys: `python manage_keys.py create <name>`. |
+
+## Learned router training
+
+| File | What it does |
+|---|---|
+| `seed_traffic.py` | Replays `test_queries.json` through the **live API** to produce genuine logged routing decisions — bootstraps real training data. |
+| `train_router.py` | Trains a TF-IDF + Logistic Regression classifier on logged (query, tier) pairs from Postgres, reports held-out accuracy, saves `router_model.joblib`. |
+
+## Quality & drift monitoring
+
+| File | What it does |
+|---|---|
+| `quality_check.py` | Lightweight LLM-as-judge spot check: samples 10 cases where the router used a smaller model and got a different answer, asks the baseline model to judge if it's still acceptable. |
+| `quality_monitor.py` | BERTScore-based evaluation — scores *every* case where routing selected a smaller model against the baseline's answer, by semantic similarity, not exact wording or an extra LLM call. |
+| `drift_monitor.py` | Chi-squared test comparing the recent vs. reference tier-distribution of real routing decisions, to flag when traffic looks statistically different from what the router was built around. |
+| `cache_reaper.py` | Standalone cleanup job that purges cache entries past their TTL, for storage hygiene (freshness is already enforced at lookup time regardless). |
 
 ## Test data & experiment runner
 
 | File | What it does |
 |---|---|
-| `test_queries.json` | The fixed set of 60 questions both systems are tested on. Deliberately includes exact repeats, reworded repeats (paraphrases), easy questions, hard questions, and one-off unique questions — so we can see cache hits and routing decisions happen in a controlled way. |
-| `run_benchmark.py` | Runs all 60 questions through Setup A, then all 60 through Setup B (with an empty cache to start, so it's a fair fight), and logs every single result to `benchmark_results.csv`. |
-| `quality_check.py` | A lightweight "did the cheaper model actually give a good answer?" check. Finds cases where the adaptive system used a smaller model and got a different answer than baseline, samples 10 of them, and asks the model itself to judge whether the smaller model's answer still holds up. |
+| `test_queries.json` | The fixed set of 60 questions used for benchmarking: exact repeats, paraphrases, easy questions, hard questions, and one-off unique questions. |
+| `run_benchmark.py` | Runs all 60 questions through Setup A, then Setup B (cold cache), and logs every result to `benchmark_results.csv`. |
+| `load_test.py` | Fires concurrent, randomly-ordered requests at the live API to validate throughput/stability under real, unpredictable traffic — unlike `run_benchmark.py`'s fixed sequential pass. |
 
 ## Reporting & demo
 
 | File | What it does |
 |---|---|
-| `generate_report.py` | Reads `benchmark_results.csv` and crunches the numbers: average latency, total cost, cache hit rate, which tier got used how often. Outputs `report.md` plus two chart images. |
-| `demo.py` | The live, interactive part. Type a question, see both systems answer it side by side with timing/cost/cache-hit info. This is what you run live in front of the professor. |
+| `generate_report.py` | Reads `benchmark_results.csv`, computes latency/cost/cache-hit/tier-distribution stats, and writes `report.md` plus two chart images. |
+| `demo.py` | Interactive CLI: type a question, see both systems answer it side by side with timing/cost/cache-hit info. |
 
-## Generated output (not hand-written — these get overwritten every run)
+## Infrastructure
+
+| File | What it does |
+|---|---|
+| `Dockerfile` | Builds the API service image. |
+| `docker-compose.yml` | The full stack: PostgreSQL, Qdrant, Ollama (+ a one-shot `ollama-pull` job), the API, Prometheus, Grafana. `docker compose up -d` starts everything. |
+| `.dockerignore` | Keeps `venv/`, generated artifacts, and docs out of the built image. |
+| `monitoring/prometheus.yml` | Scrape config pointing at the API's `/metrics` endpoint. |
+| `monitoring/grafana/` | Auto-provisioned Prometheus datasource + the "CostQual-Router" dashboard (cache hit rate, cost, query volume by tier, p95 latency by tier). |
+| `.github/workflows/ci.yml` | Runs the test suite on every push against real Postgres/Qdrant service containers and freshly-pulled small/medium Ollama models. |
+| `pytest.ini` | Registers the `requires_large_model` marker used to skip the large-tier test in CI. |
+
+## Generated output (not hand-written — overwritten each run)
 
 | File | What it is |
 |---|---|
-| `benchmark_results.csv` | Raw log: every question, which system answered it, how long it took, whether it was a cache hit, which tier, estimated cost, and the actual answer text. |
-| `quality_check_results.csv` | The 10 sampled quality-check questions with both answers and a PASS/FAIL verdict. |
-| `report.md` | The human-readable summary: tables + a plain-English paragraph of what the numbers mean. |
+| `benchmark_results.csv` | Raw log: every question, which system answered it, latency, cache-hit, tier, estimated cost, and the answer text. |
+| `quality_check_results.csv` | The LLM-judge sample with PASS/FAIL verdicts. |
+| `quality_monitor_results.csv` | The BERTScore evaluation results. |
+| `report.md` | Human-readable summary: tables + a plain-English interpretation. |
 | `cost_comparison.png`, `latency_comparison.png` | The two bar charts referenced in `report.md`. |
+| `router_model.joblib` | The trained learned-router classifier. |
 
 ## Tests
 
 | File | What it does |
 |---|---|
-| `tests/test_router.py` | Checks the routing rules actually classify example questions correctly (e.g. "What is X?" → small, "Explain why..." → large). |
-| `tests/test_cache.py` | Checks the cache returns a hit for a reworded duplicate, and `None` for something unrelated. |
-| `tests/test_handlers.py` | Checks `ask_baseline` and `ask_adaptive` return the same shape of result, and that asking the same question twice through the adaptive system produces a cache hit the second time. |
+| `tests/test_router.py` | Rule-based router classifies example questions correctly. |
+| `tests/test_config.py` | Regression guard: all three model tiers must be genuinely distinct models. |
+| `tests/test_cache.py` | Cache hits/misses, persistence across a reconnect, TTL purge, and a regression test for a real concurrency race found by load testing. |
+| `tests/test_learned_router.py` | The trained classifier loads, returns valid tiers, and falls back to the rule-based router if no model file exists. |
+| `tests/test_handlers.py` | `ask_baseline`/`ask_adaptive` shapes, cache-hit-on-repeat, the large tier is genuinely reachable, and the `ROUTER_MODE` flag actually switches routers. |
+| `tests/test_api.py` | The live API: health, auth (missing/invalid/valid key), validation, cache hits, and usage attribution. |
 | `conftest.py` | Housekeeping so pytest can find the project's modules when run from the `tests/` folder. |
 
 ## Everything else
 
 | File | What it does |
 |---|---|
-| `requirements.txt` | The list of Python packages needed (`pip install -r requirements.txt` reads this). |
-| `README.md` | Setup instructions, how to run everything, and the actual results from our benchmark. |
-| `prototype_plan.md` | The original spec this prototype was built from — what's in scope, what's deliberately left out. |
-| `.gitignore` | Tells git to ignore the virtual environment and Python's cache folders so they don't get committed. |
+| `requirements.txt` | Python dependencies (`pip install -r requirements.txt`). |
+| `README.md` | What this is, how to run it, and the final results. |
+| `MODULES.md` | The 7-module build history — what each module added and what was verified. |
+| `FINAL_REPORT.md` | The final written comparison: baseline vs. adaptive vs. original prototype. |
+| `ABSTRACT.md` | The formal project summary. |
+| `prototype_plan.md` | The original spec the 5-day prototype was built from. |
+| `.gitignore` | Ignores the virtual environment and Python cache folders. |
 
-## How a single question flows through Setup B (adaptive)
+## How a single question flows through Setup B (adaptive), end to end
 
-1. `demo.py` (or `run_benchmark.py`) calls `ask_adaptive(query)` in `adaptive.py`.
-2. `adaptive.py` asks `cache.py`: "have I seen something like this before?"
-   - **Yes** → return the saved answer immediately. Done. (Near-zero cost, near-zero latency.)
-   - **No** → continue to step 3.
-3. `adaptive.py` asks `router.py`: "how hard is this question?" → gets back `small`/`medium`/`large`.
-4. `adaptive.py` calls that tier's model via `ollama_client.py`.
-5. `adaptive.py` saves the new question + answer into the cache via `cache.py`, so next time it's a hit.
-6. Returns the answer, timing, tier used, and cost back to the caller.
+1. A client sends `POST /query` with an `X-API-Key` header (`api.py`).
+2. The key is checked against Postgres (`db.get_api_key_owner`); invalid/missing → 401.
+3. `adaptive.py` asks `cache.py`: "have I seen something like this before?" (a Qdrant similarity
+   search, filtered to entries still inside their 24h TTL).
+   - **Hit** → return the saved answer immediately. Near-zero cost, near-zero latency.
+   - **Miss** → continue.
+4. `adaptive.py` asks the active router (`router.py` or `learned_router.py`, per `ROUTER_MODE`):
+   "how hard is this question?" → `small`/`medium`/`large`.
+5. `adaptive.py` calls that tier's model via `ollama_client.py`.
+6. The new question + answer is written back into the cache.
+7. The request is logged to Postgres (`query_log`) and recorded in Prometheus metrics.
+8. The answer, tier used, cache-hit status, latency, and cost are returned to the client.
 
-Setup A (`baseline.py`) skips all of that and just does step 4, every time, with one fixed model.
+Setup A (`baseline.py`) skips all of that and just calls one fixed model every time.

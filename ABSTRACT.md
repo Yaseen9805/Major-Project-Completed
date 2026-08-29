@@ -19,19 +19,25 @@ estimates query complexity and routes the request to the smallest capable model 
 of locally hosted, open-source models, reserving the most capable tier for genuinely complex
 queries.
 
-A controlled benchmark comparing this adaptive system against a naive single-model baseline was
-conducted using a curated 60-query test set spanning exact duplicates, paraphrases, simple
-factual questions, complex reasoning questions, and unique one-off queries. Results demonstrate a
-35% reduction in estimated serving cost and a 23% semantic cache hit rate — driven by both exact
-and paraphrased repeats — with answer quality preserved in the majority of cases where routing
-selected a smaller model, as verified through an automated LLM-based quality assessment.
+An initial controlled benchmark comparing this adaptive system against a naive single-model
+baseline, using a curated 60-query test set spanning exact duplicates, paraphrases, simple factual
+questions, complex reasoning questions, and unique one-off queries, demonstrated a 35% reduction in
+estimated serving cost and a 23% semantic cache hit rate with two of three tiers aliased to the same
+underlying model, validating the core hypothesis.
 
-This prototype validates the core hypothesis and forms the foundation for a seven-month project
-extending the system with a genuine three-tier model hierarchy, persistent vector-based caching,
-rigorous quality evaluation (BERTScore), a learned machine-learning-based routing classifier, and
-production-oriented infrastructure — authentication, monitoring, and CI/CD — implemented entirely
-using free and open-source, self-hosted tooling to ensure full reproducibility without reliance
-on any paid third-party service.
+The system was subsequently extended across seven build modules into a production-shaped service:
+a genuine three-tier model hierarchy, persistent vector-based caching (Qdrant) with per-entry
+expiry, a supervised learned routing classifier trained on real logged traffic (deployed behind a
+feature flag pending more training data), rigorous quality evaluation via BERTScore in place of the
+initial LLM-judge spot check, drift detection, and production-oriented infrastructure —
+authentication, Prometheus/Grafana monitoring, CI/CD, and a fully containerized one-command
+deployment — implemented entirely with free and open-source, self-hosted tooling. Re-benchmarked
+against the completed system, results improved to a 58% reduction in estimated serving cost (once
+the three model tiers were made genuinely distinct) and an 89% BERTScore pass rate on routed
+answers, at the honestly-disclosed cost of an 80% increase in average latency versus the baseline,
+attributable to the large tier's greater capability. A concurrency defect surfaced by load testing
+was identified and fixed, with a regression test added. Full reproducibility is preserved throughout:
+no paid third-party API is used at any point in the system.
 
 **Keywords:** Large Language Models, Semantic Caching, Model Routing, Cost Optimization, Local
 Inference, Efficient AI Serving
